@@ -10,7 +10,8 @@ const CLASSES: Array[Dictionary] = [
 		"starting_life": 50,
 		"starting_mana": 15,
 		"resource_type": "mana",
-		"equipment_tags": ["bow", "spear", "javelin", "light_armor"]
+		"equipment_tags": ["bow", "spear", "javelin", "light_armor"],
+		"starting_equipment_item_ids": ["hunter_bow"]
 	},
 	{
 		"id": "sorceress",
@@ -20,7 +21,8 @@ const CLASSES: Array[Dictionary] = [
 		"starting_life": 40,
 		"starting_mana": 35,
 		"resource_type": "mana",
-		"equipment_tags": ["staff", "wand", "orb", "light_armor"]
+		"equipment_tags": ["staff", "wand", "orb", "light_armor"],
+		"starting_equipment_item_ids": ["apprentice_wand"]
 	},
 	{
 		"id": "necromancer",
@@ -30,7 +32,8 @@ const CLASSES: Array[Dictionary] = [
 		"starting_life": 45,
 		"starting_mana": 25,
 		"resource_type": "mana",
-		"equipment_tags": ["wand", "shield", "light_armor"]
+		"equipment_tags": ["wand", "shield", "light_armor"],
+		"starting_equipment_item_ids": ["apprentice_wand", "buckler"]
 	},
 	{
 		"id": "paladin",
@@ -40,7 +43,8 @@ const CLASSES: Array[Dictionary] = [
 		"starting_life": 55,
 		"starting_mana": 15,
 		"resource_type": "mana",
-		"equipment_tags": ["sword", "mace", "shield", "heavy_armor"]
+		"equipment_tags": ["sword", "mace", "shield", "heavy_armor"],
+		"starting_equipment_item_ids": ["short_sword", "buckler"]
 	},
 	{
 		"id": "barbarian",
@@ -50,7 +54,8 @@ const CLASSES: Array[Dictionary] = [
 		"starting_life": 60,
 		"starting_mana": 10,
 		"resource_type": "stamina",
-		"equipment_tags": ["axe", "mace", "sword", "heavy_armor"]
+		"equipment_tags": ["axe", "mace", "sword", "heavy_armor"],
+		"starting_equipment_item_ids": ["short_sword"]
 	},
 	{
 		"id": "assassin",
@@ -60,7 +65,8 @@ const CLASSES: Array[Dictionary] = [
 		"starting_life": 50,
 		"starting_mana": 25,
 		"resource_type": "mana",
-		"equipment_tags": ["claw", "dagger", "light_armor"]
+		"equipment_tags": ["claw", "dagger", "light_armor"],
+		"starting_equipment_item_ids": ["short_sword"]
 	},
 	{
 		"id": "druid",
@@ -70,7 +76,8 @@ const CLASSES: Array[Dictionary] = [
 		"starting_life": 55,
 		"starting_mana": 20,
 		"resource_type": "mana",
-		"equipment_tags": ["club", "staff", "pelt", "medium_armor"]
+		"equipment_tags": ["club", "staff", "pelt", "medium_armor"],
+		"starting_equipment_item_ids": ["apprentice_staff"]
 	}
 ]
 

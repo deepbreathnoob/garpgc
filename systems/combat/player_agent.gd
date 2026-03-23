@@ -8,6 +8,7 @@ const SPEED := 180.0
 var _body: Polygon2D
 var controls_enabled := true
 var arena_size := Vector2.ZERO
+var _last_aim_direction := Vector2.RIGHT
 
 func _ready() -> void:
 	collision_layer = 1
@@ -35,11 +36,13 @@ func _physics_process(_delta: float) -> void:
 		return
 
 	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	if direction != Vector2.ZERO:
+		_last_aim_direction = direction.normalized()
 	velocity = direction * SPEED
 	move_and_slide()
 	if arena_size != Vector2.ZERO:
 		global_position = global_position.clamp(Vector2(18, 18), arena_size - Vector2(18, 18))
 
 	if Input.is_action_just_pressed("attack"):
-		var aim_direction := direction if direction != Vector2.ZERO else Vector2.RIGHT
+		var aim_direction := direction if direction != Vector2.ZERO else _last_aim_direction
 		attack_requested.emit(global_position, aim_direction.normalized())

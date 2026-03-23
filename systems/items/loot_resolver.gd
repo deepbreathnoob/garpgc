@@ -8,7 +8,7 @@ var _serial_counter := 1
 func load_definitions(loot_tables: Dictionary) -> void:
 	_loot_tables = loot_tables.duplicate(true)
 
-func resolve_drop(enemy_role: String, item_registry: ItemRegistry, affix_generator: AffixGenerator) -> Dictionary:
+func resolve_drop(enemy_role: String, item_registry, affix_generator) -> Dictionary:
 	var table_id := "boss" if enemy_role == "boss" else "default"
 	var entry: Dictionary = _pick_weighted(_loot_tables.get(table_id, []))
 	if entry.is_empty():
@@ -25,13 +25,22 @@ func resolve_drop(enemy_role: String, item_registry: ItemRegistry, affix_generat
 		"item_id": item_definition.get("id", ""),
 		"name": _build_display_name(item_definition.get("name", ""), affixes),
 		"type": item_definition.get("type", ""),
+		"consumable_kind": item_definition.get("consumable_kind", ""),
+		"auto_pickup": bool(item_definition.get("auto_pickup", false)),
 		"equip_slot": item_definition.get("equip_slot", ""),
+		"item_tags": item_definition.get("item_tags", []).duplicate(),
 		"size": item_definition.get("size", Vector2i.ONE),
 		"stackable": bool(item_definition.get("stackable", false)),
 		"max_stack": int(item_definition.get("max_stack", 1)),
+		"required_level": int(item_definition.get("required_level", 0)),
+		"required_attributes": item_definition.get("required_attributes", {}).duplicate(true),
+		"allowed_class_ids": item_definition.get("allowed_class_ids", []).duplicate(),
+		"required_class_tags": item_definition.get("required_class_tags", []).duplicate(),
+		"two_handed": bool(item_definition.get("two_handed", false)),
 		"quantity": 1,
 		"rarity_id": rarity.get("id", "common"),
 		"rarity_color": rarity.get("color", Color.WHITE),
+		"vendor_value": int(item_definition.get("vendor_value", 0)),
 		"base_stats": item_definition.get("base_stats", {}).duplicate(true),
 		"affixes": affixes,
 	}

@@ -13,7 +13,7 @@ func create_profile(class_definition: Dictionary) -> Dictionary:
 		"base_starting_life": int(class_definition.get("starting_life", 0)),
 		"base_starting_mana": int(class_definition.get("starting_mana", 0)),
 		"attributes": base_attributes.duplicate(true),
-		"derived_stats": _build_derived_stats(class_definition, base_attributes)
+		"derived_stats": build_derived_stats(class_definition, base_attributes)
 	}
 
 func allocate_points(profile: Dictionary, allocation: Dictionary) -> bool:
@@ -36,15 +36,28 @@ func allocate_points(profile: Dictionary, allocation: Dictionary) -> bool:
 
 	profile["attributes"] = attributes
 	profile["available_attribute_points"] = available_points - requested_points
-	profile["derived_stats"] = _build_derived_stats(profile, attributes)
+	profile["derived_stats"] = build_derived_stats(profile, attributes)
 	return true
 
 func grant_level_rewards(profile: Dictionary, class_definition: Dictionary) -> void:
 	profile["level"] = int(profile.get("level", 1)) + 1
 	profile["available_attribute_points"] = int(profile.get("available_attribute_points", 0)) + int(class_definition.get("attribute_points_per_level", 5))
-	profile["derived_stats"] = _build_derived_stats(class_definition, profile.get("attributes", {}))
+	profile["derived_stats"] = build_derived_stats(class_definition, profile.get("attributes", {}))
 
-func _build_derived_stats(source_definition: Dictionary, attributes: Dictionary) -> Dictionary:
+func build_derived_stats(source_definition: Dictionary, attributes: Dictionary, bonus_stats: Dictionary = {}) -> Dictionary:
+	var derived_stats := _build_base_derived_stats(source_definition, attributes)
+	derived_stats["life"] += int(bonus_stats.get("life_bonus", 0))
+	derived_stats["mana"] += int(bonus_stats.get("mana_bonus", 0))
+	derived_stats["stamina"] += int(bonus_stats.get("stamina_bonus", 0))
+	derived_stats["attack_rating"] += int(bonus_stats.get("attack_rating", 0))
+	derived_stats["defense"] += int(bonus_stats.get("defense", 0))
+	derived_stats["damage"] += int(bonus_stats.get("damage", 0))
+	derived_stats["magic_find"] = int(bonus_stats.get("magic_find", 0))
+	for resistance_name in ["physical_resistance", "fire_resistance", "cold_resistance", "lightning_resistance", "poison_resistance"]:
+		derived_stats[resistance_name] = float(bonus_stats.get(resistance_name, 0.0))
+	return derived_stats
+
+func _build_base_derived_stats(source_definition: Dictionary, attributes: Dictionary) -> Dictionary:
 	var vitality: int = int(attributes.get("vitality", 0))
 	var energy: int = int(attributes.get("energy", 0))
 	var dexterity: int = int(attributes.get("dexterity", 0))
@@ -56,5 +69,12 @@ func _build_derived_stats(source_definition: Dictionary, attributes: Dictionary)
 		"mana": starting_mana + energy * 2,
 		"stamina": 50 + vitality + energy,
 		"attack_rating": dexterity * 5,
-		"defense": dexterity + int(strength / 2.0)
+		"defense": dexterity + int(strength / 2.0),
+		"damage": 2 + int(strength / 5.0),
+		"magic_find": 0,
+		"physical_resistance": 0.0,
+		"fire_resistance": 0.0,
+		"cold_resistance": 0.0,
+		"lightning_resistance": 0.0,
+		"poison_resistance": 0.0,
 	}

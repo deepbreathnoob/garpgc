@@ -63,6 +63,12 @@ func build_snapshot() -> Dictionary:
 		"run_completed": _run_completed,
 	}
 
+func restore_from_snapshot(snapshot: Dictionary) -> void:
+	_current_area_id = snapshot.get("area_id", "")
+	_current_state = _state_from_name(str(snapshot.get("state", "hub")))
+	_run_failed = bool(snapshot.get("run_failed", false))
+	_run_completed = bool(snapshot.get("run_completed", false))
+
 func _state_for_area(area_definition: Dictionary) -> RunState:
 	match area_definition.get("kind", "field"):
 		"hub":
@@ -71,5 +77,18 @@ func _state_for_area(area_definition: Dictionary) -> RunState:
 			return RunState.DUNGEON
 		"boss_room":
 			return RunState.BOSS_ROOM
+		_:
+			return RunState.FIELD
+
+func _state_from_name(state_name: String) -> RunState:
+	match state_name:
+		"hub":
+			return RunState.HUB
+		"dungeon":
+			return RunState.DUNGEON
+		"boss_room":
+			return RunState.BOSS_ROOM
+		"town":
+			return RunState.TOWN
 		_:
 			return RunState.FIELD

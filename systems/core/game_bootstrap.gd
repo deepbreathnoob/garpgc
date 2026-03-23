@@ -12,14 +12,16 @@ const WorldItemDropType = preload("res://systems/items/world_item_drop.gd")
 const ARENA_SIZE := Vector2(960, 540)
 const PLAYER_ATTACK_RANGE := 56.0
 
-var _enemy_archetype_registry: EnemyArchetypeRegistry
-var _elite_modifier_registry: EliteModifierRegistry
-var _spawn_resolver: SpawnResolver
-var _player: PlayerAgent
-var _hud: RuntimeHud
+var _enemy_archetype_registry
+var _elite_modifier_registry
+var _spawn_resolver
+var _player
+var _hud
 var _arena_root: Node2D
-var _enemies: Array[EnemyAgent] = []
-var _world_drops: Array[WorldItemDrop] = []
+var _arena_fill: Polygon2D
+var _arena_border: Line2D
+var _enemies: Array = []
+var _world_drops: Array = []
 var _encounter_order := ["blood_moor", "den_of_evil"]
 var _encounter_index := 0
 
@@ -31,10 +33,71 @@ func _ready() -> void:
 	print("Game runtime initialized: ", GameRuntime.get_runtime_snapshot())
 
 func _process(_delta: float) -> void:
+	if _hud != null and _hud.handle_interface_input():
+		_refresh_hud()
+		return
+	if _hud != null and _hud.is_window_open():
+		_refresh_hud()
+		return
 	if Input.is_action_just_pressed("reset_run"):
 		_respawn_player()
+	if Input.is_action_just_pressed("reset_world"):
+		_reset_world_run()
+	if Input.is_action_just_pressed("activate_waypoint"):
+		GameRuntime.activate_current_waypoint()
+	if Input.is_action_just_pressed("waypoint_act_prev"):
+		GameRuntime.cycle_waypoint_act(-1)
+	if Input.is_action_just_pressed("waypoint_act_next"):
+		GameRuntime.cycle_waypoint_act(1)
+	if Input.is_action_just_pressed("waypoint_prev"):
+		GameRuntime.cycle_waypoint_selection(-1)
+	if Input.is_action_just_pressed("waypoint_next"):
+		GameRuntime.cycle_waypoint_selection(1)
+	if Input.is_action_just_pressed("waypoint_travel"):
+		var waypoint_result: Dictionary = GameRuntime.fast_travel_to_selected_waypoint()
+		if bool(waypoint_result.get("ok", false)):
+			_sync_after_runtime_travel()
+	if Input.is_action_just_pressed("town_portal"):
+		var portal_result: Dictionary = GameRuntime.use_town_portal()
+		if bool(portal_result.get("ok", false)) and portal_result.has("area_id"):
+			_sync_after_runtime_travel()
 	if Input.is_action_just_pressed("pickup_item"):
 		_try_pickup_nearest_item()
+	_try_auto_pickup_consumables()
+	if Input.is_action_just_pressed("hub_cycle_npc"):
+		GameRuntime.cycle_hub_npc()
+	if Input.is_action_just_pressed("hub_cycle_service"):
+		GameRuntime.cycle_hub_service()
+	if Input.is_action_just_pressed("vendor_cycle_stock"):
+		GameRuntime.cycle_vendor_stock()
+	if Input.is_action_just_pressed("vendor_buy"):
+		GameRuntime.buy_selected_vendor_item()
+	if Input.is_action_just_pressed("vendor_sell"):
+		GameRuntime.sell_first_inventory_item_to_vendor()
+	if Input.is_action_just_pressed("vendor_buyback"):
+		GameRuntime.buy_back_last_vendor_item()
+	if Input.is_action_just_pressed("vendor_refresh"):
+		GameRuntime.refresh_current_vendor_stock()
+	if Input.is_action_just_pressed("equip_item"):
+		GameRuntime.equip_first_inventory_item()
+	if Input.is_action_just_pressed("unequip_item"):
+		GameRuntime.unequip_last_item()
+	if Input.is_action_just_pressed("use_health_potion"):
+		GameRuntime.use_consumable("health")
+	if Input.is_action_just_pressed("use_mana_potion"):
+		GameRuntime.use_consumable("mana")
+	if Input.is_action_just_pressed("use_stamina_potion"):
+		GameRuntime.use_consumable("stamina")
+	if Input.is_action_just_pressed("stash_store"):
+		GameRuntime.stash_first_inventory_item()
+	if Input.is_action_just_pressed("stash_take"):
+		GameRuntime.withdraw_first_stash_item()
+	if Input.is_action_just_pressed("save_game"):
+		GameRuntime.save_progress()
+	if Input.is_action_just_pressed("load_game"):
+		var load_result: Dictionary = GameRuntime.load_progress()
+		if bool(load_result.get("ok", false)):
+			_sync_after_load()
 	_refresh_hud()
 
 func _build_runtime() -> void:
@@ -56,27 +119,27 @@ func _build_arena() -> void:
 	_arena_root = Node2D.new()
 	add_child(_arena_root)
 
-	var arena := Polygon2D.new()
-	arena.polygon = PackedVector2Array([
+	_arena_fill = Polygon2D.new()
+	_arena_fill.polygon = PackedVector2Array([
 		Vector2.ZERO,
 		Vector2(ARENA_SIZE.x, 0),
 		Vector2(ARENA_SIZE.x, ARENA_SIZE.y),
 		Vector2(0, ARENA_SIZE.y),
 	])
-	arena.color = Color(0.11, 0.16, 0.12, 1.0)
-	_arena_root.add_child(arena)
+	_arena_fill.color = Color(0.11, 0.16, 0.12, 1.0)
+	_arena_root.add_child(_arena_fill)
 
-	var border := Line2D.new()
-	border.width = 3.0
-	border.default_color = Color(0.45, 0.58, 0.42, 1.0)
-	border.closed = true
-	border.points = PackedVector2Array([
+	_arena_border = Line2D.new()
+	_arena_border.width = 3.0
+	_arena_border.default_color = Color(0.45, 0.58, 0.42, 1.0)
+	_arena_border.closed = true
+	_arena_border.points = PackedVector2Array([
 		Vector2.ZERO,
 		Vector2(ARENA_SIZE.x, 0),
 		Vector2(ARENA_SIZE.x, ARENA_SIZE.y),
 		Vector2(0, ARENA_SIZE.y),
 	])
-	_arena_root.add_child(border)
+	_arena_root.add_child(_arena_border)
 
 func _spawn_player() -> void:
 	_player = PlayerAgentType.new()
@@ -105,7 +168,7 @@ func _spawn_enemies_for_current_area() -> void:
 			enemy.queue_free()
 	_enemies.clear()
 
-	var spawns := _spawn_resolver.resolve_for_area(GameRuntime.gameplay_state_machine.get_current_area_id())
+	var spawns: Array = _spawn_resolver.resolve_for_area(GameRuntime.gameplay_state_machine.get_current_area_id())
 	for index in range(spawns.size()):
 		var spawn_definition: Dictionary = spawns[index]
 		var archetype: Dictionary = _enemy_archetype_registry.get_archetype(spawn_definition.get("enemy_id", ""))
@@ -136,14 +199,21 @@ func _pick_spawn_position(index: int) -> Vector2:
 	return positions[index % positions.size()]
 
 func _on_player_attack_requested(origin: Vector2, direction: Vector2) -> void:
-	var best_enemy: EnemyAgent
+	if GameRuntime.is_safe_zone():
+		return
+	var best_enemy
 	var best_distance := INF
+	var fallback_enemy
+	var fallback_distance := INF
 	for enemy in _enemies:
 		if not is_instance_valid(enemy):
 			continue
 		var distance := origin.distance_to(enemy.global_position)
 		if distance > PLAYER_ATTACK_RANGE:
 			continue
+		if distance < fallback_distance:
+			fallback_distance = distance
+			fallback_enemy = enemy
 		var alignment := direction.dot((enemy.global_position - origin).normalized())
 		if alignment < 0.2:
 			continue
@@ -152,16 +222,18 @@ func _on_player_attack_requested(origin: Vector2, direction: Vector2) -> void:
 			best_enemy = enemy
 
 	if best_enemy == null:
+		best_enemy = fallback_enemy
+	if best_enemy == null:
 		return
 
 	best_enemy.apply_hit({
-		"damage": {"physical": 14},
+		"damage": {"physical": GameRuntime.get_player_attack_damage()},
 		"status_effects": []
 	})
 
 func _on_enemy_defeated(_enemy_id: String, reward: Dictionary, role: String) -> void:
 	var resolved_reward: Dictionary = GameRuntime.resolve_enemy_defeat(reward, role)
-	var alive_enemies: Array[EnemyAgent] = []
+	var alive_enemies: Array = []
 	for enemy in _enemies:
 		if is_instance_valid(enemy):
 			alive_enemies.append(enemy)
@@ -178,13 +250,24 @@ func _on_enemy_defeated(_enemy_id: String, reward: Dictionary, role: String) -> 
 func _respawn_player() -> void:
 	GameRuntime.respawn_player()
 	_player.global_position = ARENA_SIZE / 2.0
-	_start_encounter(_encounter_index)
+	_sync_after_runtime_travel()
+
+func _reset_world_run() -> void:
+	var reset_result: Dictionary = GameRuntime.reset_world_run(_encounter_order[0])
+	if not bool(reset_result.get("ok", false)):
+		return
+	_player.global_position = ARENA_SIZE / 2.0
+	_start_encounter(0)
 
 func _refresh_hud() -> void:
 	if _hud == null:
 		return
 	var snapshot := GameRuntime.get_runtime_snapshot()
-	_player.controls_enabled = not bool(snapshot.get("current_state", {}).get("run_failed", false))
+	_player.controls_enabled = (
+		not bool(snapshot.get("current_state", {}).get("run_failed", false))
+		and not _hud.is_window_open()
+	)
+	_apply_area_presentation(snapshot)
 	var alive_enemies := 0
 	for enemy in _enemies:
 		if is_instance_valid(enemy):
@@ -205,6 +288,17 @@ func _start_encounter(index: int) -> void:
 	GameRuntime.travel_to_area(area_id)
 	_spawn_enemies_for_current_area()
 
+func _sync_after_load() -> void:
+	_sync_after_runtime_travel()
+
+func _sync_after_runtime_travel() -> void:
+	_player.global_position = ARENA_SIZE / 2.0
+	var current_area_id: String = GameRuntime.gameplay_state_machine.get_current_area_id()
+	var loaded_index := _encounter_order.find(current_area_id)
+	if loaded_index != -1:
+		_encounter_index = loaded_index
+	_spawn_enemies_for_current_area()
+
 func _spawn_world_drop(item_instance: Dictionary) -> void:
 	var drop := WorldItemDropType.new()
 	drop.setup(item_instance)
@@ -213,12 +307,12 @@ func _spawn_world_drop(item_instance: Dictionary) -> void:
 	_world_drops.append(drop)
 
 func _try_pickup_nearest_item() -> void:
-	var best_drop: WorldItemDrop
+	var best_drop
 	var best_distance := 48.0
 	for drop in _world_drops:
 		if not is_instance_valid(drop):
 			continue
-		var distance := _player.global_position.distance_to(drop.global_position)
+		var distance: float = _player.global_position.distance_to(drop.global_position)
 		if distance < best_distance:
 			best_distance = distance
 			best_drop = drop
@@ -227,3 +321,34 @@ func _try_pickup_nearest_item() -> void:
 	if GameRuntime.add_item_to_inventory(best_drop.item_instance):
 		_world_drops.erase(best_drop)
 		best_drop.queue_free()
+
+func _try_auto_pickup_consumables() -> void:
+	for drop in _world_drops.duplicate():
+		if not is_instance_valid(drop):
+			continue
+		if not bool(drop.item_instance.get("auto_pickup", false)):
+			continue
+		if _player.global_position.distance_to(drop.global_position) > 28.0:
+			continue
+		if GameRuntime.add_item_to_inventory(drop.item_instance):
+			_world_drops.erase(drop)
+			drop.queue_free()
+
+func _apply_area_presentation(snapshot: Dictionary) -> void:
+	if _arena_fill == null or _arena_border == null:
+		return
+	var current_state: Dictionary = snapshot.get("current_state", {})
+	if bool(snapshot.get("hub_state", {}).get("is_safe_zone", false)):
+		_arena_fill.color = Color(0.10, 0.12, 0.19, 1.0)
+		_arena_border.default_color = Color(0.67, 0.74, 0.92, 1.0)
+		return
+	match str(current_state.get("state", "field")):
+		"boss_room":
+			_arena_fill.color = Color(0.21, 0.08, 0.08, 1.0)
+			_arena_border.default_color = Color(0.84, 0.32, 0.28, 1.0)
+		"dungeon":
+			_arena_fill.color = Color(0.08, 0.09, 0.12, 1.0)
+			_arena_border.default_color = Color(0.42, 0.46, 0.58, 1.0)
+		_:
+			_arena_fill.color = Color(0.11, 0.16, 0.12, 1.0)
+			_arena_border.default_color = Color(0.45, 0.58, 0.42, 1.0)

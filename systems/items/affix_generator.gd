@@ -9,11 +9,11 @@ func set_seed(seed_value: int) -> void:
 func choose_rarity(rarities: Array[Dictionary]) -> Dictionary:
 	return _pick_weighted(rarities, "weight")
 
-func generate_affixes(item_definition: Dictionary, rarity: Dictionary, item_registry: ItemRegistry) -> Array[Dictionary]:
+func generate_affixes(item_definition: Dictionary, rarity: Dictionary, item_registry) -> Array[Dictionary]:
 	var affix_count: int = int(rarity.get("affix_count", 0))
 	if affix_count <= 0:
 		return []
-	var pool := item_registry.get_affixes_for_item(item_definition.get("type", ""), 1)
+	var pool: Array[Dictionary] = item_registry.get_affixes_for_item(item_definition.get("type", ""), 1)
 	var chosen: Array[Dictionary] = []
 	while chosen.size() < affix_count and not pool.is_empty():
 		var index := _rng.randi_range(0, pool.size() - 1)

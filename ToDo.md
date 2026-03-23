@@ -74,7 +74,7 @@ Statusy:
 - `[DONE]` Zaimplementować generator affixów.
   Zakres: prefixy/suffixy, ograniczenia typów przedmiotów, level gating i wsparcie dla seedów debugowych.
 
-- `[TODO]` Dodać sloty ekwipunku i system paper-doll.
+- `[DONE]` Dodać sloty ekwipunku i system paper-doll.
   Zakres: walidację zakładania, ograniczenia klas/atrybutów/poziomu i przeliczanie statystyk.
 
 - `[DONE]` Zaimplementować system tabel dropu i resolver łupów.
@@ -84,20 +84,20 @@ Statusy:
   Zakres: reprezentację dropów na mapie, interakcję pickup i walidację miejsca w ekwipunku.
 
 - `[DONE]` Zaimplementować gridowy ekwipunek.
-  Zakres: zajętość pól, rozmiary przedmiotów, drag and drop, auto-place oraz podstawy sortowania.
+  Zakres: zajętość pól, rozmiary przedmiotów, auto-place oraz drag and drop działają w runtime/UI.
 
-- `[TODO]` Dodać stash jako trwały magazyn przedmiotów.
+- `[DONE]` Dodać stash jako trwały magazyn przedmiotów.
   Zakres: pojemność, serializację, politykę shared/character stash oraz walidację antyduplikacyjną.
 
 ## Faza 5. Progresja świata i podróżowanie
 
-- `[TODO]` Zaimplementować waypointy i szybkie podróżowanie.
+- `[DONE]` Zaimplementować waypointy i szybkie podróżowanie.
   Zakres: odblokowanie per postać, UI podziału na akty oraz ograniczenia użycia.
 
-- `[TODO]` Dodać system Town Portal.
+- `[DONE]` Dodać system Town Portal.
   Zakres: tymczasowy portal dwukierunkowy, owner binding, warunki unieważnienia i zasady anty-exploit.
 
-- `[TODO]` Zaimplementować system hubów miejskich i usług NPC.
+- `[DONE]` Zaimplementować system hubów miejskich i usług NPC.
   Zakres: safe zone, przełączanie stanu audio/UI, vendorzy, stash, NPC questowi i craftingowi.
 
 - `[TODO]` Dodać system obiektów interaktywnych świata.
@@ -128,33 +128,33 @@ Statusy:
 - `[DONE]` Zaimplementować HUD i UI statusu walki.
   Zakres: health, resource, hotbar, buffy/debuffy, target info i overlay HP bossa.
 
-- `[TODO]` Dodać komplet UI dla inventory, equipment, stash i cube.
-  Zakres: tooltipy, porównanie itemów, akcje kontekstowe i wspólny kontroler drag and drop.
+- `[IN PROGRESS]` Dodać komplet UI dla inventory, equipment, stash i cube.
+  Zakres: inventory, equipment, stash, vendor i journal mają już okienkowe UI z tooltipami, porównaniem itemów i akcjami kontekstowymi; drag and drop działa już dla inventory/equipment/stash, ale nadal brakuje Horadric Cube, domknięcia przepływu vendorowego myszą i finalnego polishu layoutu.
 
-- `[TODO]` Zaimplementować journal questów i UI progresji.
-  Zakres: statusy active/completed/failed, grupowanie per akt i podpowiedzi celu.
+- `[IN PROGRESS]` Zaimplementować journal questów i UI progresji.
+  Zakres: lista questów, statusy i panel szczegółów działają; nadal brakuje lepszego grupowania per akt i podpowiedzi celu.
 
-- `[TODO]` Dodać UI podróżowania przez waypointy.
+- `[DONE]` Dodać UI podróżowania przez waypointy.
   Zakres: zakładki aktów, stany enabled/disabled i reguły dostępności.
 
 ## Faza 8. Zapis, reset świata i ekonomia
 
-- `[TODO]` Zaimplementować system zapisu stanu postaci.
+- `[DONE]` Zaimplementować system zapisu stanu postaci.
   Zakres: statystyki, skille, questy, waypointy, ekwipunek, stash i postęp kampanii.
 
-- `[TODO]` Dodać walidację integralności save'a i strategię migracji wersji.
+- `[DONE]` Dodać walidację integralności save'a i strategię migracji wersji.
   Zakres: wersjonowanie danych, zgodność wsteczna i wykrywanie uszkodzonych zapisów.
 
-- `[TODO]` Zaimplementować reset świata i obsługę powtarzalnych runów.
+- `[DONE]` Zaimplementować reset świata i obsługę powtarzalnych runów.
   Zakres: respawn przeciwników, reset lokalnych obiektów oraz zachowanie trwałych odblokowań.
 
-- `[TODO]` Dodać system vendorów i transakcji.
+- `[DONE]` Dodać system vendorów i transakcji.
   Zakres: ceny, odświeżanie asortymentu, buyback oraz wsparcie dla consumables i equipment.
 
 - `[TODO]` Zaimplementować system identyfikacji przedmiotów.
   Zakres: stan unidentified, akcję reveal i zmianę tooltipu po identyfikacji.
 
-- `[TODO]` Dodać system consumables.
+- `[DONE]` Dodać system consumables.
   Zakres: typy mikstur, quick-sloty, stackowanie i reguły auto-pickupu.
 
 ## Faza 9. Integracja techniczna i testy
