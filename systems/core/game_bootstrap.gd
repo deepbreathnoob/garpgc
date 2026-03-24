@@ -11,6 +11,22 @@ const WorldItemDropType = preload("res://systems/items/world_item_drop.gd")
 
 const ARENA_SIZE := Vector2(960, 540)
 const PLAYER_ATTACK_RANGE := 56.0
+const CAMPAIGN_ROUTES := {
+	"act_1": [
+		"rogue_encampment",
+		"blood_moor",
+		"den_of_evil",
+		"cold_plains",
+		"burial_grounds",
+		"stony_field",
+		"dark_wood",
+		"black_marsh",
+		"forgotten_tower",
+		"tamoe_highland",
+		"monastery_gate",
+		"catacombs_level_4",
+	],
+}
 
 var _enemy_archetype_registry
 var _elite_modifier_registry
@@ -22,8 +38,6 @@ var _arena_fill: Polygon2D
 var _arena_border: Line2D
 var _enemies: Array = []
 var _world_drops: Array = []
-var _encounter_order := ["blood_moor", "den_of_evil"]
-var _encounter_index := 0
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -43,6 +57,8 @@ func _process(_delta: float) -> void:
 		_respawn_player()
 	if Input.is_action_just_pressed("reset_world"):
 		_reset_world_run()
+	if Input.is_action_just_pressed("advance_area"):
+		_advance_campaign_progress()
 	if Input.is_action_just_pressed("activate_waypoint"):
 		GameRuntime.activate_current_waypoint()
 	if Input.is_action_just_pressed("waypoint_act_prev"):
@@ -113,7 +129,7 @@ func _build_runtime() -> void:
 	_build_arena()
 	_spawn_player()
 	_spawn_hud()
-	_start_encounter(0)
+	_sync_after_runtime_travel()
 
 func _build_arena() -> void:
 	_arena_root = Node2D.new()
@@ -241,10 +257,6 @@ func _on_enemy_defeated(_enemy_id: String, reward: Dictionary, role: String) -> 
 	var item_drop: Dictionary = resolved_reward.get("item_drop", {})
 	if not item_drop.is_empty():
 		_spawn_world_drop(item_drop)
-	if role == "boss":
-		_advance_after_boss_clear()
-	elif _enemies.is_empty():
-		_advance_after_clear()
 	_refresh_hud()
 
 func _respawn_player() -> void:
@@ -253,11 +265,11 @@ func _respawn_player() -> void:
 	_sync_after_runtime_travel()
 
 func _reset_world_run() -> void:
-	var reset_result: Dictionary = GameRuntime.reset_world_run(_encounter_order[0])
+	var reset_result: Dictionary = GameRuntime.reset_world_run(_get_current_route_start_area())
 	if not bool(reset_result.get("ok", false)):
 		return
 	_player.global_position = ARENA_SIZE / 2.0
-	_start_encounter(0)
+	_sync_after_runtime_travel()
 
 func _refresh_hud() -> void:
 	if _hud == null:
@@ -274,30 +286,74 @@ func _refresh_hud() -> void:
 			alive_enemies += 1
 	_hud.refresh(snapshot, alive_enemies)
 
-func _advance_after_clear() -> void:
-	if _encounter_index + 1 >= _encounter_order.size():
+func _advance_campaign_progress() -> void:
+	if _has_alive_enemies():
 		return
-	_start_encounter(_encounter_index + 1)
+	var current_area_id: String = GameRuntime.gameplay_state_machine.get_current_area_id()
+	var current_area: Dictionary = GameRuntime.area_graph.get_area(current_area_id)
+	if current_area.is_empty():
+		return
 
-func _advance_after_boss_clear() -> void:
-	_refresh_hud()
+	if str(current_area.get("kind", "")) == "boss_room":
+		_advance_after_boss_clear(current_area)
+		return
 
-func _start_encounter(index: int) -> void:
-	_encounter_index = clampi(index, 0, _encounter_order.size() - 1)
-	var area_id: String = _encounter_order[_encounter_index]
-	GameRuntime.travel_to_area(area_id)
-	_spawn_enemies_for_current_area()
+	var next_area_id := _get_next_route_area_id(current_area_id)
+	if next_area_id.is_empty():
+		return
+	GameRuntime.travel_to_area(next_area_id, true)
+	_sync_after_runtime_travel()
+
+func _advance_after_boss_clear(current_area: Dictionary) -> void:
+	var current_act_id: String = str(current_area.get("act_id", GameRuntime.current_act_id))
+	var next_act_id: String = GameRuntime.act_registry.get_next_act_id(current_act_id)
+	if not next_act_id.is_empty() and GameRuntime.unlocked_act_ids.has(next_act_id):
+		var next_act: Dictionary = GameRuntime.act_registry.get_by_id(next_act_id)
+		var next_hub_area_id: String = str(next_act.get("hub_area_id", ""))
+		if not next_hub_area_id.is_empty():
+			GameRuntime.travel_to_area(next_hub_area_id, true)
+			_sync_after_runtime_travel()
+			return
+	GameRuntime.return_to_hub()
+	_sync_after_runtime_travel()
 
 func _sync_after_load() -> void:
 	_sync_after_runtime_travel()
 
 func _sync_after_runtime_travel() -> void:
 	_player.global_position = ARENA_SIZE / 2.0
-	var current_area_id: String = GameRuntime.gameplay_state_machine.get_current_area_id()
-	var loaded_index := _encounter_order.find(current_area_id)
-	if loaded_index != -1:
-		_encounter_index = loaded_index
 	_spawn_enemies_for_current_area()
+
+func _get_current_route() -> Array:
+	var current_act_id: String = GameRuntime.current_act_id
+	if CAMPAIGN_ROUTES.has(current_act_id):
+		return CAMPAIGN_ROUTES[current_act_id]
+	var act: Dictionary = GameRuntime.act_registry.get_by_id(current_act_id)
+	var hub_area_id: String = str(act.get("hub_area_id", ""))
+	return [hub_area_id] if not hub_area_id.is_empty() else []
+
+func _get_current_route_start_area() -> String:
+	var route: Array = _get_current_route()
+	for area_id in route:
+		var area: Dictionary = GameRuntime.area_graph.get_area(str(area_id))
+		if str(area.get("kind", "")) != "hub":
+			return str(area_id)
+	return ""
+
+func _get_next_route_area_id(current_area_id: String) -> String:
+	var route: Array = _get_current_route()
+	var current_index := route.find(current_area_id)
+	if current_index == -1:
+		return ""
+	for index in range(current_index + 1, route.size()):
+		return str(route[index])
+	return ""
+
+func _has_alive_enemies() -> bool:
+	for enemy in _enemies:
+		if is_instance_valid(enemy):
+			return true
+	return false
 
 func _spawn_world_drop(item_instance: Dictionary) -> void:
 	var drop := WorldItemDropType.new()

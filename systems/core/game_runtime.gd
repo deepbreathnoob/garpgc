@@ -153,7 +153,15 @@ func complete_quest(quest_id: String) -> void:
 
 	completed_quest_ids.append(quest_id)
 	quest_registry.mark_completed(quest_id, quest_state)
-	_refresh_unlocked_acts()
+	var newly_unlocked_acts: Array[String] = _refresh_unlocked_acts()
+	if newly_unlocked_acts.is_empty():
+		_set_notification("Ukonczono quest %s." % quest_id)
+		return
+	var act_labels: Array[String] = []
+	for act_id in newly_unlocked_acts:
+		var act: Dictionary = act_registry.get_by_id(act_id)
+		act_labels.append(str(act.get("name", act_id)))
+	_set_notification("Ukonczono quest %s. Odblokowano: %s." % [quest_id, ", ".join(act_labels)])
 
 func resolve_enemy_defeat(reward_definition: Dictionary, role: String) -> Dictionary:
 	var reward := reward_definition.duplicate(true)
@@ -198,7 +206,10 @@ func travel_to_area(area_id: String, ignore_connections: bool = false, preserve_
 
 	if ignore_connections and not preserve_portal and current_area_id != area_id:
 		town_portal_service.invalidate(portal_state)
+	var previous_act_id := current_act_id
 	current_act_id = area.get("act_id", current_act_id)
+	if current_act_id != previous_act_id:
+		quest_registry.unlock_quests_for_act(current_act_id, quest_state)
 	gameplay_state_machine.enter_area(area)
 	hub_service.update_for_area(hub_state, area_id)
 	_ensure_hub_vendor_stock()
@@ -381,6 +392,14 @@ func cycle_hub_service(direction: int = 1) -> Dictionary:
 	if not bool(hub_state.get("is_in_hub", false)):
 		return _fail_result("Zmiana uslugi jest dostepna tylko w hubie.")
 	hub_service.cycle_selected_service(hub_state, direction)
+	_ensure_hub_vendor_stock()
+	return _success_result(_describe_current_hub_service())
+
+func activate_hub_service(service_id: String) -> Dictionary:
+	if not bool(hub_state.get("is_in_hub", false)):
+		return _fail_result("Zmiana uslugi jest dostepna tylko w hubie.")
+	if not hub_service.activate_service(hub_state, service_id):
+		return _fail_result("Brak uslugi %s w aktualnym hubie." % service_id)
 	_ensure_hub_vendor_stock()
 	return _success_result(_describe_current_hub_service())
 
@@ -783,13 +802,17 @@ func _apply_runtime_snapshot(snapshot: Dictionary) -> Dictionary:
 	_recalculate_player_stats()
 	return {"ok": true}
 
-func _refresh_unlocked_acts() -> void:
+func _refresh_unlocked_acts() -> Array[String]:
+	var newly_unlocked: Array[String] = []
 	for act in act_registry.get_all():
 		var act_id: String = act.get("id", "")
 		if unlocked_act_ids.has(act_id):
 			continue
 		if act_registry.is_unlocked(act_id, completed_quest_ids):
 			unlocked_act_ids.append(act_id)
+			quest_registry.unlock_quests_for_act(act_id, quest_state)
+			newly_unlocked.append(act_id)
+	return newly_unlocked
 
 func _create_player_profile(class_id: String) -> void:
 	var class_definition: Dictionary = character_class_registry.get_class_definition(class_id)

@@ -129,7 +129,7 @@ Statusy:
   Zakres: health, resource, hotbar, buffy/debuffy, target info i overlay HP bossa.
 
 - `[IN PROGRESS]` Dodać komplet UI dla inventory, equipment, stash i cube.
-  Zakres: inventory, equipment, stash, vendor i journal mają już okienkowe UI z tooltipami, porównaniem itemów i akcjami kontekstowymi; drag and drop działa już dla inventory/equipment/stash, ale nadal brakuje Horadric Cube, domknięcia przepływu vendorowego myszą i finalnego polishu layoutu.
+  Zakres: inventory, equipment, stash, vendor i journal mają już okienkowe UI z tooltipami hover, porównaniem itemów, kolorowaniem slotów per rzadkość itemu i akcjami kontekstowymi; drag and drop działa już dla inventory/equipment/stash, ale nadal brakuje Horadric Cube, domknięcia przepływu vendorowego myszą i finalnego polishu layoutu.
 
 - `[IN PROGRESS]` Zaimplementować journal questów i UI progresji.
   Zakres: lista questów, statusy i panel szczegółów działają; nadal brakuje lepszego grupowania per akt i podpowiedzi celu.
@@ -168,5 +168,5 @@ Statusy:
 - `[TODO]` Dodać test cases dla krytycznych przepływów systemowych.
   Zakres: progresja questów, dropy, transmutacje, save/load, respawn świata i boss gating.
 
-- `[TODO]` Przeprowadzić integrację całościowego loopu gry.
-  Zakres: town -> eksploracja -> walka -> boss -> loot -> powrót do town -> zapis/postęp.
+- `[IN PROGRESS]` Przeprowadzić integrację całościowego loopu gry.
+  Zakres: uproszczony loop `town -> eksploracja -> walka -> boss -> loot -> powrót -> postęp aktu` działa już dla kampanii sandboxowej Act 1; nadal brakuje pełnej integracji questów z obiektami świata, przejściami specjalnymi i docelowym contentem kolejnych aktów.

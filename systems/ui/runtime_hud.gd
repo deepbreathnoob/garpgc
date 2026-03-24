@@ -138,6 +138,8 @@ var _journal_list_label: Label
 var _journal_detail_label: RichTextLabel
 var _drag_preview: PanelContainer
 var _drag_preview_label: Label
+var _hover_tooltip: PanelContainer
+var _hover_tooltip_label: RichTextLabel
 
 var _last_snapshot: Dictionary = {}
 var _last_enemy_count := 0
@@ -160,6 +162,9 @@ var _drag_payload: Dictionary = {}
 
 func _ready() -> void:
 	_build_layout()
+
+func _process(_delta: float) -> void:
+	_update_hover_tooltip_position()
 
 func refresh(snapshot: Dictionary, enemy_count: int) -> void:
 	_last_snapshot = snapshot.duplicate(true)
@@ -265,6 +270,7 @@ func refresh(snapshot: Dictionary, enemy_count: int) -> void:
 		"Tab / I panele",
 		"Q E strony  |  W S wybor",
 		"A D kolumny  |  Enter akcja",
+		"M dalej w kampanii",
 	])
 
 	_action_skill_label.text = "\n".join([
@@ -295,6 +301,8 @@ func handle_interface_input() -> bool:
 		_window_open = not _window_open
 		if not _window_open:
 			_clear_drag_payload()
+		else:
+			_activate_contextual_hub_service()
 		_refresh_window_view()
 		return true
 
@@ -452,6 +460,8 @@ func _handle_equipment_slot_drop(slot_id: String) -> void:
 	_finalize_drag_result(result)
 
 func _handle_stash_grid_drop(area_kind: String, cell: Vector2i) -> void:
+	if not _has_active_stash_access():
+		_activate_contextual_hub_service()
 	var result := {}
 	if area_kind == "stash":
 		match str(_drag_payload.get("origin", "")):
@@ -762,6 +772,22 @@ func _build_window_overlay() -> void:
 	_drag_preview_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_drag_preview_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_drag_preview.add_child(_drag_preview_label)
+
+	_hover_tooltip = PanelContainer.new()
+	_hover_tooltip.visible = false
+	_hover_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hover_tooltip.custom_minimum_size = Vector2(220, 0)
+	_hover_tooltip.add_theme_stylebox_override("panel", _create_stylebox(WINDOW_BG, BRONZE_EDGE))
+	_window_overlay.add_child(_hover_tooltip)
+
+	_hover_tooltip_label = RichTextLabel.new()
+	_hover_tooltip_label.fit_content = true
+	_hover_tooltip_label.scroll_active = false
+	_hover_tooltip_label.bbcode_enabled = true
+	_hover_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hover_tooltip_label.add_theme_font_size_override("normal_font_size", 12)
+	_hover_tooltip_label.add_theme_color_override("default_color", TEXT_PRIMARY)
+	_hover_tooltip.add_child(_hover_tooltip_label)
 
 func _build_character_window() -> Control:
 	var root := Control.new()
@@ -1200,6 +1226,8 @@ func _create_backpack_cell_widget(cell_size: Vector2i = Vector2i(44, 44), font_s
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(cell_size.x, cell_size.y)
 	panel.add_theme_stylebox_override("panel", _create_inventory_slot_stylebox(STONE_MID, BRONZE_SOFT, false))
+	panel.mouse_entered.connect(_on_item_hover_started.bind(panel))
+	panel.mouse_exited.connect(_on_item_hover_ended)
 
 	var label := _create_text_label(font_size, true, TEXT_PRIMARY)
 	label.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1216,6 +1244,8 @@ func _create_equipment_slot_widget(title_text: String) -> Dictionary:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(20, 20)
 	panel.add_theme_stylebox_override("panel", _create_inventory_slot_stylebox(STONE_MID, BRONZE_SOFT, false))
+	panel.mouse_entered.connect(_on_item_hover_started.bind(panel))
+	panel.mouse_exited.connect(_on_item_hover_ended)
 
 	var title_label := _create_text_label(1, true, TEXT_ACCENT)
 	title_label.text = title_text
@@ -1234,6 +1264,16 @@ func _create_equipment_slot_widget(title_text: String) -> Dictionary:
 		"title": title_label,
 		"value": value_label,
 	}
+
+func _on_item_hover_started(panel: Control) -> void:
+	var item: Dictionary = panel.get_meta("tooltip_item", {})
+	if item.is_empty():
+		_hide_hover_tooltip()
+		return
+	_show_hover_tooltip(_build_item_tooltip_text(item))
+
+func _on_item_hover_ended() -> void:
+	_hide_hover_tooltip()
 
 func _create_orb_display(title_text: String, fill_color: Color) -> Dictionary:
 	var root := VBoxContainer.new()
@@ -1564,6 +1604,7 @@ func _cycle_window_tab(direction: int) -> void:
 	if current_index == -1:
 		current_index = 0
 	_active_window_tab = WINDOW_TABS[posmod(current_index + direction, WINDOW_TABS.size())]
+	_activate_contextual_hub_service()
 	_refresh_window_view()
 
 func _navigate_horizontal(direction: int) -> void:
@@ -1644,6 +1685,8 @@ func _activate_inventory_entry() -> void:
 
 func _activate_stash_entry() -> void:
 	if not _has_active_stash_access():
+		_activate_contextual_hub_service()
+	if not _has_active_stash_access():
 		return
 	if _stash_focus == "stash":
 		var stash_items: Array = _get_stash_items()
@@ -1661,6 +1704,8 @@ func _activate_stash_entry() -> void:
 		)
 
 func _activate_vendor_entry() -> void:
+	if not _has_active_vendor_access():
+		_activate_contextual_hub_service()
 	if not _has_active_vendor_access():
 		return
 	match _vendor_focus:
@@ -1925,13 +1970,11 @@ func _build_item_detail_text(item: Dictionary, comparison_item: Dictionary = {},
 	var quantity := int(item.get("quantity", 1))
 	if quantity > 1:
 		lines.append("Ilosc: %s" % str(quantity))
-	var size: Vector2i = item.get("size", Vector2i.ONE)
-	lines.append("Rozmiar: %sx%s" % [str(size.x), str(size.y)])
 
 	var stat_lines := _build_item_stat_lines(item)
 	if not stat_lines.is_empty():
 		lines.append("")
-		lines.append("Staty:")
+		lines.append("Statystyki")
 		lines.append_array(stat_lines)
 
 	var requirement_line := _build_requirement_line(item)
@@ -2046,8 +2089,10 @@ func _refresh_equipment_slot_controls(entries: Array, selected_index: int, is_fo
 		var value_label: Label = widget.get("value")
 		var is_selected := is_focused and index == selected_index
 		var is_filled := not item.is_empty()
-		panel.add_theme_stylebox_override("panel", _create_inventory_slot_stylebox(STONE_MID, BRONZE_SOFT, is_selected, is_filled))
-		value_label.text = _item_short_token(item) if is_filled else _slot_short_label(slot_id)
+		var fill_color := _item_visual_color(item) if is_filled else Color.TRANSPARENT
+		panel.add_theme_stylebox_override("panel", _create_inventory_slot_stylebox(STONE_MID, BRONZE_SOFT, is_selected, is_filled, fill_color, is_filled, fill_color.lightened(0.24)))
+		panel.set_meta("tooltip_item", item.duplicate(true) if is_filled else {})
+		value_label.text = "" if is_filled else _slot_short_label(slot_id)
 		value_label.add_theme_color_override("font_color", TEXT_ACCENT if is_filled else TEXT_MUTED)
 
 func _refresh_inventory_grid_controls(items: Array, selected_index: int, is_focused: bool) -> void:
@@ -2072,6 +2117,7 @@ func _refresh_item_grid_controls(
 ) -> void:
 	var selected_cells := {}
 	var occupied_cells := {}
+	var origin_cells := {}
 	var used_cells := 0
 	for index in range(items.size()):
 		var item: Dictionary = items[index]
@@ -2084,6 +2130,8 @@ func _refresh_item_grid_controls(
 				used_cells += 1
 				var key := "%s:%s" % [str(x), str(y)]
 				occupied_cells[key] = item
+				if position == Vector2i(x, y):
+					origin_cells[key] = true
 				if is_focused and index == selected_index:
 					selected_cells[key] = true
 	for y in range(grid_size.y):
@@ -2097,16 +2145,27 @@ func _refresh_item_grid_controls(
 			var cell_key := "%s:%s" % [str(x), str(y)]
 			var has_item := occupied_cells.has(cell_key)
 			var is_selected_cell := selected_cells.has(cell_key)
-			panel.add_theme_stylebox_override("panel", _create_inventory_slot_stylebox(STONE_MID, BRONZE_SOFT, is_selected_cell, has_item))
+			var fill_color := Color.TRANSPARENT
+			if has_item:
+				fill_color = _item_visual_color(occupied_cells.get(cell_key, {}))
+			panel.add_theme_stylebox_override("panel", _create_inventory_slot_stylebox(
+				STONE_MID,
+				BRONZE_SOFT,
+				is_selected_cell,
+				has_item,
+				fill_color,
+				origin_cells.has(cell_key),
+				fill_color.lightened(0.24)
+			))
 			if not has_item:
-				label.text = "%s%s" % [_grid_row_label(y), str(x + 1)]
+				label.text = ""
+				panel.set_meta("tooltip_item", {})
 				label.add_theme_color_override("font_color", TEXT_MUTED)
 				continue
 			var item: Dictionary = occupied_cells.get(cell_key, {})
-			var position: Vector2i = item.get("grid_position", Vector2i(-1, -1))
-			var is_origin := position == Vector2i(x, y)
-			label.text = _item_short_token(item) if is_origin else ""
-			label.add_theme_color_override("font_color", TEXT_ACCENT if is_selected_cell else TEXT_PRIMARY)
+			label.text = ""
+			panel.set_meta("tooltip_item", item.duplicate(true))
+			label.add_theme_color_override("font_color", TEXT_PRIMARY)
 	if usage_label != null:
 		usage_label.text = "%s  %s/%s cells used" % [
 			caption,
@@ -2308,6 +2367,83 @@ func _build_affix_label_line(item: Dictionary) -> String:
 		labels.append(str(affix.get("label", "")))
 	return ", ".join(labels)
 
+func _build_item_tooltip_text(item: Dictionary) -> String:
+	if item.is_empty():
+		return "Brak przedmiotu."
+	var rarity_color := _item_rarity_color(item)
+	var header := "[color=%s][b]%s[/b][/color]" % [_color_to_bbcode(rarity_color), str(item.get("name", "-"))]
+	var meta_parts: Array[String] = [
+		_format_rarity(str(item.get("rarity_id", "common"))),
+		str(item.get("type", "item")).capitalize(),
+	]
+	var slot_id := str(item.get("equip_slot", ""))
+	if not slot_id.is_empty():
+		meta_parts.append(_humanize_slot_id(slot_id))
+	if bool(item.get("two_handed", false)):
+		meta_parts.append("2H")
+	if int(item.get("quantity", 1)) > 1:
+		meta_parts.append("x%s" % str(item.get("quantity", 1)))
+
+	var sections: Array[String] = [
+		header,
+		"[color=%s]%s[/color]" % [_color_to_bbcode(TEXT_MUTED), " | ".join(meta_parts)],
+	]
+
+	var stat_lines := _build_item_stat_lines(item)
+	if not stat_lines.is_empty():
+		sections.append("")
+		for line in stat_lines:
+			sections.append("[color=%s]%s[/color]" % [_color_to_bbcode(TEXT_PRIMARY), line])
+
+	var requirement_line := _build_requirement_line(item)
+	if not requirement_line.is_empty():
+		sections.append("")
+		sections.append("[color=%s]%s[/color]" % [_color_to_bbcode(TEXT_WARNING), requirement_line])
+
+	var affix_labels := _build_affix_label_line(item)
+	if not affix_labels.is_empty():
+		sections.append("")
+		sections.append("[color=%s]Affixy:[/color] %s" % [_color_to_bbcode(TEXT_ACCENT), affix_labels])
+
+	var comparison_item := _get_equipped_compare_item(item)
+	var comparison_lines := _build_item_tooltip_comparison_lines(item, comparison_item)
+	if not comparison_lines.is_empty():
+		sections.append("")
+		sections.append("[color=%s]Porownanie:[/color]" % _color_to_bbcode(TEXT_ACCENT))
+		sections.append_array(comparison_lines)
+
+	return "\n".join(sections)
+
+func _build_item_tooltip_comparison_lines(item: Dictionary, comparison_item: Dictionary) -> Array[String]:
+	if comparison_item.is_empty():
+		return []
+	var item_slot_id := str(item.get("equip_slot", ""))
+	var compare_slot_id := str(comparison_item.get("equip_slot", ""))
+	if item_slot_id.is_empty() or item_slot_id != compare_slot_id:
+		return []
+	var lines: Array[String] = [
+		"[color=%s]vs %s[/color]" % [_color_to_bbcode(TEXT_MUTED), str(comparison_item.get("name", "-"))]
+	]
+	var item_stats: Dictionary = _extract_item_stats(item)
+	var comparison_stats: Dictionary = _extract_item_stats(comparison_item)
+	for stat_name in ["damage", "defense", "attack_rating", "life_bonus", "mana_bonus", "stamina_bonus", "magic_find"]:
+		var delta := float(item_stats.get(stat_name, 0)) - float(comparison_stats.get(stat_name, 0))
+		if is_zero_approx(delta):
+			continue
+		var is_positive := delta > 0.0
+		var color := TEXT_SUCCESS if is_positive else HP_COLOR
+		var prefix := "+" if is_positive else ""
+		lines.append("[color=%s]%s %s%s[/color]" % [
+			_color_to_bbcode(color),
+			STAT_LABELS.get(stat_name, stat_name),
+			prefix,
+			_format_delta_value(delta),
+		])
+	if lines.size() > 1:
+		return lines
+	var empty_lines: Array[String] = []
+	return empty_lines
+
 func _build_comparison_lines(item: Dictionary, comparison_item: Dictionary) -> Array[String]:
 	if comparison_item.is_empty():
 		return []
@@ -2352,6 +2488,15 @@ func _has_active_stash_access() -> bool:
 func _has_active_vendor_access() -> bool:
 	var hub_state: Dictionary = _last_snapshot.get("hub_state", {})
 	return bool(hub_state.get("is_in_hub", false)) and str(hub_state.get("selected_service_id", "")) == "vendor"
+
+func _activate_contextual_hub_service() -> void:
+	if not bool(_last_snapshot.get("hub_state", {}).get("is_in_hub", false)):
+		return
+	match _active_window_tab:
+		"stash":
+			GameRuntime.activate_hub_service("stash")
+		"vendor":
+			GameRuntime.activate_hub_service("vendor")
 
 func _format_item_row(item: Dictionary, is_selected: bool, is_focused: bool, with_grid_coords: bool = false) -> String:
 	var prefix := ">"
@@ -2553,11 +2698,11 @@ func _create_trim_stylebox() -> StyleBoxFlat:
 	style.content_margin_bottom = 6
 	return style
 
-func _create_inventory_slot_stylebox(background: Color, border_color: Color, is_selected: bool, is_filled: bool = false) -> StyleBoxFlat:
+func _create_inventory_slot_stylebox(background: Color, border_color: Color, is_selected: bool, is_filled: bool = false, fill_color: Color = Color.TRANSPARENT, is_origin: bool = false, origin_border_color: Color = Color.TRANSPARENT) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.19, 0.15, 0.12, 0.98) if is_filled else background
-	style.border_color = TEXT_ACCENT if is_selected else border_color
-	style.set_border_width_all(3 if is_selected else 2)
+	style.bg_color = fill_color if is_filled else background
+	style.border_color = TEXT_ACCENT if is_selected else (origin_border_color if is_origin else border_color)
+	style.set_border_width_all(3 if is_selected or is_origin else 2)
 	style.corner_radius_top_left = 4
 	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_left = 4
@@ -2569,6 +2714,56 @@ func _create_inventory_slot_stylebox(background: Color, border_color: Color, is_
 	style.content_margin_right = 6
 	style.content_margin_bottom = 4
 	return style
+
+func _item_visual_color(item: Dictionary) -> Color:
+	if item.is_empty():
+		return STONE_MID
+	var rarity_color := _item_rarity_color(item)
+	return rarity_color.darkened(0.20)
+
+func _item_rarity_color(item: Dictionary) -> Color:
+	var rarity_color: Color = item.get("rarity_color", Color.WHITE)
+	if rarity_color == Color.WHITE:
+		match str(item.get("rarity_id", "common")):
+			"magic":
+				rarity_color = Color(0.46, 0.68, 0.98, 1.0)
+			"rare":
+				rarity_color = Color(0.94, 0.84, 0.34, 1.0)
+			_:
+				rarity_color = Color(0.72, 0.72, 0.68, 1.0)
+	return rarity_color
+
+func _color_to_bbcode(color: Color) -> String:
+	return color.to_html(false)
+
+func _show_hover_tooltip(text: String) -> void:
+	if _hover_tooltip == null or _hover_tooltip_label == null:
+		return
+	_hover_tooltip_label.clear()
+	_hover_tooltip_label.append_text(text)
+	_hover_tooltip.reset_size()
+	_hover_tooltip.visible = true
+	_update_hover_tooltip_position()
+
+func _hide_hover_tooltip() -> void:
+	if _hover_tooltip == null:
+		return
+	_hover_tooltip.visible = false
+
+func _update_hover_tooltip_position() -> void:
+	if _hover_tooltip == null or not _hover_tooltip.visible:
+		return
+	var mouse_position := get_viewport().get_mouse_position() + Vector2(18, 18)
+	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
+	var tooltip_size := _hover_tooltip.get_combined_minimum_size()
+	var position := mouse_position
+	if position.x + tooltip_size.x > viewport_rect.size.x - 12.0:
+		position.x = viewport_rect.size.x - tooltip_size.x - 12.0
+	if position.y + tooltip_size.y > viewport_rect.size.y - 12.0:
+		position.y = viewport_rect.size.y - tooltip_size.y - 12.0
+	position.x = maxf(position.x, 12.0)
+	position.y = maxf(position.y, 12.0)
+	_hover_tooltip.position = position
 
 func _create_orb_stylebox() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()

@@ -131,6 +131,20 @@ func cycle_selected_service(state: Dictionary, direction: int = 1) -> void:
 		index = posmod(index + direction, services.size())
 	state["selected_service_id"] = services[index]
 
+func activate_service(state: Dictionary, service_id: String) -> bool:
+	var hub: Dictionary = get_hub(str(state.get("hub_area_id", "")))
+	if hub.is_empty():
+		return false
+	var requested_service_id := str(service_id)
+	for npc in hub.get("npcs", []):
+		var services: Array[String] = _to_string_array(npc.get("services", []))
+		if not services.has(requested_service_id):
+			continue
+		state["selected_npc_id"] = str(npc.get("id", ""))
+		state["selected_service_id"] = requested_service_id
+		return true
+	return false
+
 func build_preview(state: Dictionary) -> Array[String]:
 	if not bool(state.get("is_in_hub", false)):
 		return []
